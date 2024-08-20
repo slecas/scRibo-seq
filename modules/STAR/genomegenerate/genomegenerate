@@ -1,0 +1,56 @@
+#!/usr/bin/env nextflow
+
+// module for creating STAR index 
+
+process STAR_INDEX_CON{
+    conda 'bioconda::star=2.7.6a samtools'
+
+    publishDir = './contamgengen/'
+
+    input:
+    file mask_genome
+    file annotation 
+    file contamination
+    path mergegtf
+    path fatogtf
+
+    output:
+    path ('*')
+
+
+    script:
+    //replace everything bar the inputs with params in config
+
+    """
+    python3 ${fatogtf} ${contamination} > ${contamination.baseName}.gtf
+
+    cat ${mask_genome} ${contamination} > contamination.fa | samtools faidx contamination.fa
+
+    python3 ${mergegtf} ${annotation} ${contamination.baseName}.gtf > contamination.gtf
+
+    mkdir contamgen
+
+    STAR \\
+        --runMode genomeGenerate \
+        --runThreadN 12 \
+        --genomeDir gengen/ \
+        --genomeFastaFiles contamination.fa \
+        --limitGenomeGenerateRAM 75161927680 \
+        --sjdbGTFfile contamination.gtf \
+        --sjdbOverhang 50 
+
+    """
+}
+
+workflow{
+    mask_genome = Channel.fromPath('/home/cashel/projects/run_res/Van_pipe/mature_trna.cluster.fa')
+    annotation = Channel.fromPath('/home/cashel/projects/run_res/Van_pipe/tRNAcluster.gtf')
+    fatogtf = Channel.fromPath('/home/cashel/projects/nextflow-first/scripts/fastatogtf.py')
+    contamination = Channel.fromPath('/home/cashel/projects/run_res/parse_reads/contamination.fasta')
+    mergegtf = Channel.fromPath('/home/cashel/projects/nextflow-first/scripts/mergegtf.py')
+
+    STAR_INDEX_CON(mask_genome,annotation,contamination,mergegtf,fatogtf)
+    
+    //collect files 
+    STAR_INDEX_CON.out
+}
